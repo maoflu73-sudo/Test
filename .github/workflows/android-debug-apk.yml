@@ -4,36 +4,61 @@ on:
   push:
     branches: [main]
     paths:
+      - 'ShiftNote_RC2_GitHub_RootReady.zip'
+      - '.github/workflows/android-debug-apk.yml'
       - 'app/**'
-      - 'build.gradle'
       - 'settings.gradle'
-      - 'gradle/**'
+      - 'build.gradle'
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
-      - name: Checkout
+      - name: Checkout source repository
         uses: actions/checkout@v4
-      - name: Java 17
+      - name: Extract submitted ShiftNote source
+        shell: bash
+        run: |
+          if [ -f ShiftNote_RC2_GitHub_RootReady.zip ]; then
+            python3 - <<'PY'
+          from zipfile import ZipFile
+          from pathlib import Path
+          archive = Path("ShiftNote_RC2_GitHub_RootReady.zip")
+          with ZipFile(archive) as z:
+              assert z.testzip() is None, "ZIP CRC check failed"
+              for info in z.infolist():
+                  if info.is_dir(): continue
+                  p = Path(info.filename)
+                  assert not p.is_absolute() and ".." not in p.parts, "Unsafe ZIP path"
+                  target = Path.cwd() / p
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  target.write_bytes(z.read(info))
+          assert Path("app/build.gradle").is_file()
+          assert Path("settings.gradle").is_file()
+          print("Android project extracted")
+          PY
+          fi
+          test -f app/build.gradle || (echo "Missing Android project; upload ShiftNote_RC2_GitHub_RootReady.zip to repo root" && exit 1)
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - name: Android SDK
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-      - name: Android platform and build tools
+      - name: Install Android 35 SDK
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-      - name: Gradle 8.7
+      - name: Set up Gradle 8.7
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
-      - name: Build debug APK and unit tests
+      - name: Run tests and build APK
         run: gradle --no-daemon testDebugUnitTest assembleDebug
-      - name: Upload APK
+      - name: Upload debug APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ShiftNoteNext-1.2.0-rc2-debug
           path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
