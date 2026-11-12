@@ -65,6 +65,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
+      - name: Enable AndroidX in Gradle
+        shell: bash
+        run: |
+          printf '\nandroid.useAndroidX=true\nandroid.enableJetifier=true\norg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8\n' >> gradle.properties
       - name: Run tests and build APK
         run: gradle --no-daemon testDebugUnitTest assembleDebug
       - name: Upload debug APK
